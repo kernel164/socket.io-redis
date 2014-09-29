@@ -46,6 +46,7 @@ function adapter(uri, opts){
   var pub = opts.pubClient;
   var sub = opts.subClient;
   var prefix = opts.key || 'socket.io';
+  var codec = opts.codec || 'none';
 
   // init clients if needed
   if (!pub) pub = socket ? redis(socket) : redis(port, host);
@@ -90,7 +91,7 @@ function adapter(uri, opts){
   Redis.prototype.onmessage = function(pattern, channel, msg){
     var pieces = channel.split('#');
     if (uid == pieces.pop()) return debug('ignore same uid');
-    var args = msgpack.decode(msg);
+    var args = decode(msg);
 
     if (args[0] && args[0].nsp === undefined) {
       args[0].nsp = '/';
@@ -116,8 +117,34 @@ function adapter(uri, opts){
 
   Redis.prototype.broadcast = function(packet, opts, remote){
     Adapter.prototype.broadcast.call(this, packet, opts);
-    if (!remote) pub.publish(key, msgpack.encode([packet, opts]));
+    if (!remote) pub.publish(key, encode(packet, opts));
   };
+
+  /**
+   * encode.
+   */
+
+  function encode(packet, opts) {
+    switch(codec) {
+      case 'msgpack':
+        return msgpack.encode([packet, opts]);
+      default:
+        return JSON.stringify([packet, opts]);
+    }
+  }
+
+  /**
+   * decode.
+   */
+
+  function decode(msg) {
+    switch(codec) {
+      case 'msgpack':
+        return msgpack.decode(msg);
+      default:
+        return JSON.parse(msg);
+    }
+  }
 
   return Redis;
 
